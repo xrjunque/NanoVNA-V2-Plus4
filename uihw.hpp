@@ -1,7 +1,7 @@
 #pragma once
 #include <mculib/small_function.hpp>
 #include <stdint.h>
-
+void ui_simulate_touch(int x, int y);
 // hardware interfacing for the UI
 
 namespace UIHW {

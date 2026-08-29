@@ -233,19 +233,49 @@ touch_draw_test(void)
   uiEnableProcessing();
 }
 
+static bool simulated_touch = false;    /*************************   XJ   *******************/
+static int simulated_touch_x;
+static int simulated_touch_y;
+
+void ui_simulate_touch(int x, int y)  /*************************   XJ   *******************/
+{
+    simulated_touch_x = x;
+    simulated_touch_y = y;
+    simulated_touch = true;
+
+    UIEvent evt;
+    evt.button = UIEventButtons::Touch;
+
+    evt.type = UIEventTypes::Down;
+    UIHW::emitEvent(evt);
+
+    evt.type = UIEventTypes::Up;
+    UIHW::emitEvent(evt);
+}
 
 bool touch_position(int *x, int *y)
 {
-  uint16_t touchX, touchY;
-  if(!UIHW::touchPosition(touchX, touchY))
-    return false;
-  *x = (int(touchX) - config.touch_cal[0]) * 16 / config.touch_cal[2];
-  *y = (int(touchY) - config.touch_cal[1]) * 16 / config.touch_cal[3];
-  if(config.ui_options & UI_OPTIONS_FLIP) {
-    *x = LCD_WIDTH  - *x;
-    *y = LCD_HEIGHT - *y;
-  }
-  return true;
+    if (simulated_touch) {
+        *x = simulated_touch_x;
+        *y = simulated_touch_y;
+        simulated_touch = false;
+        return true;
+    }
+
+    uint16_t touchX, touchY;
+
+    if(!UIHW::touchPosition(touchX, touchY))
+        return false;
+
+    *x = (int(touchX) - config.touch_cal[0]) * 16 / config.touch_cal[2];
+    *y = (int(touchY) - config.touch_cal[1]) * 16 / config.touch_cal[3];
+
+    if(config.ui_options & UI_OPTIONS_FLIP) {
+        *x = LCD_WIDTH  - *x;
+        *y = LCD_HEIGHT - *y;
+    }
+
+    return true;
 }
 
 bool touch_position(int *x, int *y, UIEvent evt) {

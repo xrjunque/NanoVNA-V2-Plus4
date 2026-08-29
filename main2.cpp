@@ -867,6 +867,17 @@ static void cmdRegisterWrite(int address) {
 		usbCaptureMode = false;
 		return;
 	}
+    if(address == 0xe8) {
+        int x = registers[0xe8] |
+               (registers[0xe9] << 8);
+
+        int y = registers[0xea] |
+               (registers[0xeb] << 8);
+		if (x < LCD_WIDTH && y < LCD_HEIGHT)
+	        ui_simulate_touch(x, y);
+
+        return;
+    }
 	if (address == 0x40) {UIActions::set_averaging(registers[0x40]); return;}
 	if (address == 0x42) {UIActions::set_adf4350_txPower(registers[0x42]); return;}
 

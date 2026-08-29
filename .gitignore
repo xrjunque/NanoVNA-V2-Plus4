@@ -6,3 +6,7 @@ gitversion.hpp
 *.*~
 tags
 cscope.out
+.vs/
+*.o
+*.elf
+*.map
