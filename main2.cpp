@@ -867,7 +867,7 @@ static void cmdRegisterWrite(int address) {
 		usbCaptureMode = false;
 		return;
 	}
-    if(address == 0xe8) {
+    if(address == 0xe8) {     /*************************   XJ   *******************/
         int x = registers[0xe8] |
                (registers[0xe9] << 8);
 

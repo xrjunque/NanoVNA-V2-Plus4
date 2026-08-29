@@ -255,7 +255,7 @@ void ui_simulate_touch(int x, int y)  /*************************   XJ   ********
 
 bool touch_position(int *x, int *y)
 {
-    if (simulated_touch) {
+    if (simulated_touch) {     /*************************   XJ   *******************/
         *x = simulated_touch_x;
         *y = simulated_touch_y;
         simulated_touch = false;
