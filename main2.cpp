@@ -128,6 +128,16 @@ static void adc_process();
 static int measurementGetDefaultGain(freqHz_t freqHz);
 void cal_interpolate(void);
 
+
+int usb_caldata_send(int id);         /*******************  XJ  **************/
+int usb_caldata_receive(uint8_t b);       /*******************  XJ  **************/
+
+bool cmdWriteFIFO(int address, 
+                    int totalBytes,
+                    int nBytes,
+                    const uint8_t* data);
+
+
 #define myassert(x) if(!(x)) do { errorBlink(3); } while(1)
 
 template<unsigned int N>
@@ -878,6 +888,11 @@ static void cmdRegisterWrite(int address) {
 
         return;
     }
+	if (address == 0xde) {     /*************************   XJ   *******************/
+		usb_caldata_send(registers[0xdf]);
+		return;
+	}
+
 	if (address == 0x40) {UIActions::set_averaging(registers[0x40]); return;}
 	if (address == 0x42) {UIActions::set_adf4350_txPower(registers[0x42]); return;}
 
@@ -906,12 +921,22 @@ static void cmdRegisterWrite(int address) {
 	}
 }
 
-
+int currValidByte = 0;
+uint8_t validChars[] = { 0xDE, 0x1};
 static void cmdInit() {
 	cmdParser.handleReadFIFO = [](int address, int nValues) {
 		return cmdReadFIFO(address, nValues);
 	};
-	cmdParser.handleWriteFIFO = [](int address, int totalBytes, int nBytes, const uint8_t* data) {};
+	cmdParser.handleWriteFIFO =
+    [](int address, int totalBytes, int nBytes, const uint8_t* data) { 
+
+         if(address == 0xDE) {    /*********************  XJ  ********************/
+             for(int i = 0; i < nBytes; i++) {
+				usb_caldata_receive(data[i]);
+             }
+		 }
+		return false;
+    };
 	cmdParser.handleWrite = [](int address) {
 		return cmdRegisterWrite(address);
 	};
@@ -927,6 +952,7 @@ static void cmdInit() {
 		cmdParser.handleInput(s, len);
 	};
 }
+
 
 static int measurementGetDefaultGain(freqHz_t freqHz) {
 	if(freqHz > 2500000000)
@@ -1253,6 +1279,86 @@ static void usb_transmit_rawSamples() {
 	rfsw(RFSW_RECV, RFSW_RECV_PORT2);
 	rfsw(RFSW_REFL, RFSW_REFL_OFF);
 	rfsw(RFSW_BBGAIN, RFSW_BBGAIN_GAIN(0));
+}
+int usb_caldata_send(int id)  /*********************  XJ ************/
+{
+    if (id < 0 || id >= SAVEAREA_MAX)
+        return -1;
+
+    const uint8_t *src = (const uint8_t *)SAVEAREA(id);
+
+    uint32_t size = sizeof(current_props);
+    serial.print((char *)&size, sizeof(size));
+    serial.print((char *)src, size);
+	exitUSBDataMode();
+    return 0;
+}
+
+uint8_t cntFF = 0;		/**********************  XJ ************/
+bool receiveInit = false;
+uint32_t currPos = 0;
+bool nextIsId = false;
+int IdCaldataReceive = 0;
+uint32_t cntSend = 0;
+
+int usb_caldata_receive(uint8_t b)        /*********************  XJ ************/
+{
+    int ret = 0;
+	uint32_t bb = b; // cntSend++;
+
+	serial.print((char *)&bb, sizeof(bb));
+	
+    if(b == 0xFF) {
+        cntFF++;
+
+        if(!receiveInit && cntFF > 7) {
+			enterUSBDataMode();
+            cntFF = 0;
+            receiveInit = true;
+            currPos = 0;
+            nextIsId = true;
+            ret = 1;               // Start of receive
+        }
+        else if(receiveInit && cntFF > 7) {
+            cntFF = 0;
+            receiveInit = false;
+
+            ecalIgnoreValues = 1000000;
+			int ret_caldata = flash_caldata_save(IdCaldataReceive);  // End of receive
+			ecalIgnoreValues = 20;
+
+            currPos = 0;
+            ret = 0xFF;  
+			serial.print((char*) &IdCaldataReceive, sizeof(IdCaldataReceive));
+			serial.print((char*) &ret_caldata, sizeof(ret_caldata));
+			serial.print((char*) &ret, sizeof(ret));
+			exitUSBDataMode();
+        }
+    }
+    else {
+        if(receiveInit) {
+            for(int i = 0; i < cntFF; i++) {
+                *((uint8_t *)&current_props + currPos) = 0xFF;
+                currPos++;
+            }
+
+            cntFF = 0;
+
+            if(nextIsId) {
+                nextIsId = false;
+                IdCaldataReceive = b;
+            }
+            else {
+                *((uint8_t *)&current_props + currPos) = b;
+                currPos++;
+            }
+        }
+        else {
+            cntFF = 0;
+        }
+    }
+
+    return ret;
 }
 
 static float bessel0(float x) {

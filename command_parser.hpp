@@ -30,7 +30,7 @@ public:
 	// nBytes is the number of bytes in data.
 	// If nonzero, totalBytes is the total bytes in this transaction.
 	// If totalValues is 0, this is a continuation of an earlier transaction.
-	small_function<void(int address, int totalBytes, int nBytes, const uint8_t* data)> handleWriteFIFO;
+	small_function<bool(int address, int totalBytes, int nBytes, const uint8_t* data)> handleWriteFIFO;
 
 	// called when a register is written
 	small_function<void(int address)> handleWrite;

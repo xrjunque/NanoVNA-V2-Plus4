@@ -30,7 +30,7 @@ static inline uint32_t SAVEAREA(int id) {
 	//assert(id >= 0 && id < SAVEAREA_MAX);
 	return SAVEAREA_BEGIN + id*SAVEAREA_BYTES;
 }
-
+void caldata_set_valid(int id);
 
 
 uint32_t flash_program_data(uint32_t start_address, uint8_t *input_data, uint32_t num_elements);

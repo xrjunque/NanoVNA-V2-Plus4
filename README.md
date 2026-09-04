@@ -3,10 +3,17 @@
 - Based on NanoVNA V2 firmware release 20201013.
 - Added remote touch support for navigating the Plus4 screen and menus from WinVNA.
 - https://xrjunque.nom.es/swdownload#winvna
+- 2026-09-04: Save and restore calibration data to and from the PC.
 
 ## What has been added
 
-Added at `ui.cpp`, around line 236:
+### º2026-09-04
+
+<img src="2026-09-04_082138.png">
+
+---
+
+Added in `ui.cpp`, around line 236:
 
 static bool simulated_touch = false;    /*************************   XJ   *******************/
 static int simulated_touch_x;
@@ -52,7 +59,26 @@ Main2.cpp around line 870:
         return;
     }
 
+main.cpp 881
+	if (address == 0xde) {     /*************************   XJ   *******************/
+	    usb_caldata_send(registers[0xdf]);
+	    return;
+	}
 
+main.cpp 1264
+int usb_caldata_send(int id)
+{
+    if (id < 0 || id >= SAVEAREA_MAX)
+        return -1;
+
+    const uint8_t *src = (const uint8_t *)SAVEAREA(id);
+
+    uint32_t size = sizeof(current_props);
+    serial.print((char *)&size, sizeof(size));
+    serial.print((char *)src, size);
+
+    return 0;
+}
 
 
 ## NanoVNA V2 Firmware
