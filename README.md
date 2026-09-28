@@ -6,8 +6,18 @@
 - 2026-09-04: Save and restore calibration data to and from the PC.
 
 ## What has been added
+### º2026-09-28 (B)
+<img src="images/2026-09-28 223234.png">
 
-### º2026-09-28
+---
+
+Fix Si5351 RX/TX PLL selection below 100 MHz
+
+- Use PLLA for RX and PLLB for TX.
+- Configure both PLLs to 888 MHz before calculating MultiSynth dividers.
+- Removes the periodic modulation/spur comb observed around CW signals.
+
+### º2026-09-28 (A)
 
 <img src="images/2026-09-28 122920.png">
 

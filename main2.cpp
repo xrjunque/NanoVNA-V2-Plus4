@@ -146,6 +146,7 @@ static void updateIFrequency(freqHz_t txFreqHz);
 static uint16_t audioQueue[512];
 static int iaudioQueue = 0;
 static bool audioSweep = false;
+
 /*******************  END XJ  ************/
 
 
@@ -1093,6 +1094,7 @@ static int measurementGetDefaultGain(freqHz_t freqHz) {
 }
 // callback called by VNAMeasurement to change rf switch positions.
 static void measurementPhaseChanged(VNAMeasurementPhases ph) {
+
 	lcdInhibit = false;
 	switch(ph) {
 		case VNAMeasurementPhases::REFERENCE:
@@ -1886,7 +1888,7 @@ int main(void) {
 	pinMode(led, OUTPUT);
 	pinMode(led2, OUTPUT);
 	// Before it was pinMode(RFSW_ECAL, OUTPUT);
-	pinMode(RFSW_ECAL[0], HIGH); /****  XJ ****/
+	digitalWrite(RFSW_ECAL[0], HIGH);  /****  XJ ****/
 	pinMode(RFSW_BBGAIN, OUTPUT);
 	pinMode(RFSW_TXSYNTH, OUTPUT);
 	pinMode(RFSW_RXSYNTH, OUTPUT);
@@ -1963,7 +1965,6 @@ int main(void) {
 
 	setFrequency(56000000);
 	updateIFrequency(300000);
-
 	// initialize VNAMeasurement
 	measurement_setup();
 	adc_setup();
@@ -2233,72 +2234,87 @@ namespace UIActions {
 	}
 
 	void set_sweep_frequency(SweepParameter type, freqHz_t frequency) {
-		switch(type) {
-			case ST_START:
-				clampFrequency(frequency);
-				freq_mode_startstop();
-				frequency0 = frequency;
-				if(frequency1 < frequency0) {
-					frequency1 = frequency0;
-				}
-				break;
-			case ST_STOP:
-				clampFrequency(frequency);
-				freq_mode_startstop();
-				frequency1 = frequency;
-				if(frequency1 < frequency0) {
-					frequency0 = frequency1;
-				}
-				break;
-			case ST_CENTER:
-			{
-				clampFrequency(frequency);
-				freq_mode_centerspan();
-				frequency0 = frequency;
-				auto center = frequency0;
-				auto span = -frequency1;
-				if (center-span/2 < FREQUENCY_MIN) {
-					span = (center - FREQUENCY_MIN) * 2;
-					frequency1 = -span;
-				}
-				if (center+span/2 > FREQUENCY_MAX) {
-					span = (FREQUENCY_MAX - center) * 2;
-					frequency1 = -span;
-				}
-				break;
+		switch (type) {
+		case ST_START:
+			clampFrequency(frequency);
+			freq_mode_startstop();
+			frequency0 = frequency;
+			if (frequency1 < frequency0) {
+				frequency1 = frequency0;
 			}
-			case ST_SPAN:
-			{
-				freq_mode_centerspan();
-				if (frequency > FREQUENCY_MAX-FREQUENCY_MIN)
-					frequency = FREQUENCY_MAX-FREQUENCY_MIN;
-				if (frequency < 0)
-					frequency = 0;
-				frequency1 = -frequency;
-				auto center = frequency0;
-				auto span = -frequency1;
-				if (center-span/2 < FREQUENCY_MIN) {
-					center = FREQUENCY_MIN + span/2;
-					frequency0 = center;
-				}
-				if (center+span/2 > FREQUENCY_MAX) {
-					center = FREQUENCY_MAX - span/2;
-					frequency0 = center;
-				}
-
-				// If span is zero, assume CW mode
-				if (span == 0)
-					current_props._measurement_mode = MEASURE_MODE_REFL_THRU;
-
-				break;
+			break;
+		case ST_STOP:
+			clampFrequency(frequency);
+			freq_mode_startstop();
+			frequency1 = frequency;
+			if (frequency1 < frequency0) {
+				frequency0 = frequency1;
 			}
-			case ST_CW:
-				clampFrequency(frequency);
-				frequency0 = frequency;
-				frequency1 = 0;
-				// True CW mode by not switching output RF switch
+			break;
+		case ST_CENTER:
+		{
+			clampFrequency(frequency);
+			freq_mode_centerspan();
+			frequency0 = frequency;
+			auto center = frequency0;
+			auto span = -frequency1;
+			if (center - span / 2 < FREQUENCY_MIN) {
+				span = (center - FREQUENCY_MIN) * 2;
+				frequency1 = -span;
+			}
+			if (center + span / 2 > FREQUENCY_MAX) {
+				span = (FREQUENCY_MAX - center) * 2;
+				frequency1 = -span;
+			}
+			break;
+		}
+		case ST_SPAN:
+		{
+			freq_mode_centerspan();
+			if (frequency > FREQUENCY_MAX - FREQUENCY_MIN)
+				frequency = FREQUENCY_MAX - FREQUENCY_MIN;
+			if (frequency < 0)
+				frequency = 0;
+			frequency1 = -frequency;
+			auto center = frequency0;
+			auto span = -frequency1;
+			if (center - span / 2 < FREQUENCY_MIN) {
+				center = FREQUENCY_MIN + span / 2;
+				frequency0 = center;
+			}
+			if (center + span / 2 > FREQUENCY_MAX) {
+				center = FREQUENCY_MAX - span / 2;
+				frequency0 = center;
+			}
+
+			// If span is zero, assume CW mode
+			if (span == 0)
 				current_props._measurement_mode = MEASURE_MODE_REFL_THRU;
-				break;
+
+			break;
+		}
+		case ST_CW:
+		{
+#if	BOARD_REVISION < 4
+			clampFrequency(frequency);
+			frequency0 = frequency;
+			frequency1 = 0;
+			// True CW mode by not switching output RF switch
+			current_props._measurement_mode = MEASURE_MODE_REFL_THRU;
+#else /***********  XJ  ************/
+			/*** added ********  XJ  ************/
+			clampFrequency(frequency);
+			frequency0 = frequency;
+			frequency1 = 0;
+			setHWSweep(sys_setSweep_args{
+				frequency,
+				0,   // step
+				1,   // points
+				1    // values
+				});
+#endif
+			break;
+			}
 			default: return;
 		}
 		setVNASweepToUI();
@@ -2316,6 +2332,11 @@ namespace UIActions {
 
 	void set_measurement_mode(enum MeasurementMode mode) {
 		current_props._measurement_mode = mode;
+
+#if BOARD_REVISION >= 4   /*******************  XJ  **************/
+		vnaMeasurement.measurement_mode = mode;
+#endif
+
 		setVNASweepToUI();
 	}
 
