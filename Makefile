@@ -54,6 +54,7 @@ CPPFLAGS       += -funsigned-char -fwrapv -fno-delete-null-pointer-checks -fno-s
 
 LDFLAGS        += -static -nostartfiles -Wl,--exclude-libs,libssp -Wl,--print-memory-usage
 LDFLAGS        += -Wl,--gc-sections
+LDFLAGS += -Wl,-Map=binary.map
 LDLIBS         += -Wl,--start-group -lgcc -lnosys -Wl,--end-group -lm
 
 GITVERSION      = "$(shell git log -n 1 --pretty=format:"git-%ad%h" --date=format:"%Y%m%d-")"
@@ -63,8 +64,13 @@ GITURL          = "$(shell git config --get remote.origin.url)"
 LIBNAME         = opencm3_$(genlink_family)
 OPENCM3_LIB     = $(OPENCM3_DIR)/lib/lib$(LIBNAME).a
 
+CFLAGS += -Os
+CXXFLAGS += -Os
+
 include $(OPENCM3_DIR)/mk/genlink-config.mk
 include $(OPENCM3_DIR)/mk/gcc-config.mk
+.PRECIOUS: %.o
+    
 
 LDSCRIPT=./gd32f303cc_with_bootloader_plus4.ld
 
@@ -90,6 +96,7 @@ flash: binary.hex
 
 bootload_firmware dfu: binary.bin
 	python3 bootload_firmware.py --file $< --serial $(BOOTLOAD_PORT)
+
 
 include $(OPENCM3_DIR)/mk/genlink-rules.mk
 include $(OPENCM3_DIR)/mk/gcc-rules.mk

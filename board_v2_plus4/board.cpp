@@ -228,6 +228,36 @@ namespace board {
 		adc_clk = 30000000;
 	}
 
+	void audioInit()  /*******************  XJ  *********************/
+	{
+		rcc_clock_setup_in_hse_24mhz_out_120mhz();
+
+		// enable basic peripherals
+		rcc_periph_clock_enable(RCC_GPIOA);
+		rcc_periph_clock_enable(RCC_GPIOB);
+		rcc_periph_clock_enable(RCC_GPIOC);
+
+		rcc_periph_clock_enable(RCC_AFIO);
+		// jtag pins should be used as GPIOs (SWD is used for debugging)
+		gpio_primary_remap(AFIO_MAPR_SWJ_CFG_JTAG_OFF_SW_ON, AFIO_MAPR_SPI1_REMAP);
+
+
+		digitalWrite(ili9341_cs, HIGH);
+		digitalWrite(xpt2046_cs, HIGH);
+		pinMode(ili9341_dc, OUTPUT);
+		pinMode(ili9341_cs, OUTPUT);
+		pinMode(xpt2046_cs, OUTPUT);
+
+		// Set 190476 Msps (=16000000/84)
+		adc_ratecfg = ADC_SMPR_SMP_71DOT5CYC;
+		adc_srate = 16000000 / 84;  //190476
+		adc_period_cycles = 84;
+		adc_clk = 16000000;
+
+
+		// Audio mode
+		rcc_set_adcpre_gd32(GD32_RCC_CFGR_ADCPRE_PCLK2_DIV6);
+	}
 
 	// returns an estimate of the HSE frequency in Hz.
 	// called by boardInit() to set hseEstimateHz.

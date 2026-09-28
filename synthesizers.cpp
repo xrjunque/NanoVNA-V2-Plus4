@@ -6,7 +6,7 @@
 using namespace board;
 
 namespace synthesizers {
-	bool si5351_setup() {
+	bool si5351_setup(bool rxOnly = false) { /************   XJ   **************/
 		using namespace Si5351;
 
 		si5351.SetFieldsToDefault();	//initialize the structure with default "safe" values
@@ -35,32 +35,36 @@ namespace synthesizers {
 		si5351.PLL[rPLL].PLL_Multiplier_Numerator = 1*8;
 		si5351.PLL[rPLL].PLL_Multiplier_Denominator = xtalFreqHz / 1000;
 
-		si5351.PLL[tPLL].PLL_Clock_Source = PLL_Clock_Source_XTAL;
-		si5351.PLL[tPLL].PLL_Multiplier_Integer = 32*128;
-		si5351.PLL[tPLL].PLL_Multiplier_Numerator = 2*8;
-		si5351.PLL[tPLL].PLL_Multiplier_Denominator = xtalFreqHz / 1000;
-
+		if (!rxOnly) /************   XJ   **************/
+		{
+			si5351.PLL[tPLL].PLL_Clock_Source = PLL_Clock_Source_XTAL;
+			si5351.PLL[tPLL].PLL_Multiplier_Integer = 32 * 128;
+			si5351.PLL[tPLL].PLL_Multiplier_Numerator = 2 * 8;
+			si5351.PLL[tPLL].PLL_Multiplier_Denominator = xtalFreqHz / 1000;
+		}
 		si5351.MS[rPort].MS_Clock_Source = MS_Clock_Source_PLLA;
 		si5351.MS[rPort].MS_Divider_Integer = 8; // divide pll frequency by 8
 
-		si5351.MS[tPort].MS_Clock_Source = MS_Clock_Source_PLLA;
-		si5351.MS[tPort].MS_Divider_Integer = 8; // divide pll frequency by 8
+		if (!rxOnly) /************   XJ   **************/
+		{
+			si5351.MS[tPort].MS_Clock_Source = MS_Clock_Source_PLLA;
+			si5351.MS[tPort].MS_Divider_Integer = 8; // divide pll frequency by 8
 
-		si5351.CLK[rPort].CLK_R_Div = CLK_R_Div1; // divide by 1; 100MHz
-		si5351.CLK[rPort].CLK_Enable = ON;	//turn on the output
-		si5351.CLK[rPort].CLK_I_Drv = CLK_I_Drv_8mA;
+			si5351.CLK[rPort].CLK_R_Div = CLK_R_Div1; // divide by 1; 100MHz
+			si5351.CLK[rPort].CLK_Enable = ON;	//turn on the output
+			si5351.CLK[rPort].CLK_I_Drv = CLK_I_Drv_8mA;
 
-		if(pPort >= 0) {
-			si5351.CLK[pPort].CLK_Clock_Source = CLK_Clock_Source_XTAL;
-			si5351.CLK[pPort].CLK_R_Div = CLK_R_Div1; // divide by 1; 24MHz
-			si5351.CLK[pPort].CLK_Enable = ON;	//turn on the output
-			si5351.CLK[pPort].CLK_I_Drv = CLK_I_Drv_2mA;
+			if (pPort >= 0) {
+				si5351.CLK[pPort].CLK_Clock_Source = CLK_Clock_Source_XTAL;
+				si5351.CLK[pPort].CLK_R_Div = CLK_R_Div1; // divide by 1; 24MHz
+				si5351.CLK[pPort].CLK_Enable = ON;	//turn on the output
+				si5351.CLK[pPort].CLK_I_Drv = CLK_I_Drv_2mA;
+			}
+
+			si5351.CLK[tPort].CLK_R_Div = CLK_R_Div1; // divide by 1; 100MHz
+			si5351.CLK[tPort].CLK_Enable = ON;	//turn on the output
+			si5351.CLK[tPort].CLK_I_Drv = CLK_I_Drv_2mA;
 		}
-
-		si5351.CLK[tPort].CLK_R_Div = CLK_R_Div1; // divide by 1; 100MHz
-		si5351.CLK[tPort].CLK_Enable = ON;	//turn on the output
-		si5351.CLK[tPort].CLK_I_Drv = CLK_I_Drv_2mA;
-
 		return si5351.Init() == 0;
 	}
 
@@ -136,7 +140,7 @@ namespace synthesizers {
 			ret = 2;
 		}
 
-		for(int i=0; i<2; i++) {
+		for (int i = 0; i < 2; i++) {  //********  XJ ******* for(int i=0; i<2; i++) {
 			uint32_t freqHz = (i == 0) ? rxFreqHz : txFreqHz;
 			int port = (i == 0) ? si5351_rxPort : si5351_txPort;
 
@@ -165,4 +169,40 @@ namespace synthesizers {
 		}
 		return ret;
 	}
+
+
+
+	//void si5351_audioSet(uint64_t audio_lo_freq,
+	//	uint32_t* P1out,
+	//	uint32_t* P2out,
+	//	uint32_t* P3out)
+	//{
+	//	// Reutilizar toda la configuración existente del Si5351 audioOn
+	//	si5351_set((uint32_t)audio_lo_freq,
+	//		(uint32_t)audio_lo_freq);
+	//	return;
+
+	//	uint64_t pllFreqHz = 888000000ULL;
+
+	//	uint64_t n =
+	//		128ULL * (pllFreqHz - 4ULL * audio_lo_freq);
+
+	//	uint32_t P1 = uint32_t(n / audio_lo_freq);
+	//	uint64_t rem = n % audio_lo_freq;
+
+	//	uint32_t P2 = (uint32_t)rem;
+	//	uint32_t P3 = (uint32_t)audio_lo_freq;
+
+	//	approximate_fraction(&P2, &P3);
+
+	//	*P1out = P1;
+	//	*P2out = P2;
+	//	*P3out = P3;
+
+	//	si5351.MSConfig2audio(
+	//		(Si5351::MSChannel)si5351_rxPort, P1, P2, P3);
+
+	//	si5351.MSConfig2audio(
+	//		(Si5351::MSChannel)si5351_txPort, P1, P2, P3);
+	//}
 }

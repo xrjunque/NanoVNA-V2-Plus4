@@ -1,5 +1,6 @@
-#include "vna_measurement.hpp"
+	#include "vna_measurement.hpp"
 #include <board.hpp>
+
 
 VNAMeasurement::VNAMeasurement(): sampleProcessor(_emitValue_t {this}) {
 
@@ -72,7 +73,6 @@ void VNAMeasurement::sweepAdvance() {
 			ecalCounterOffset = 0;
 	}
 }
-
 void VNAMeasurement::sampleProcessor_emitValue(int32_t valRe, int32_t valIm, bool clipped) {
 	auto currPoint = sweepCurrPoint;
 	/* If -1 then we restart */

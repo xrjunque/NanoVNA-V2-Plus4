@@ -7,6 +7,15 @@
 
 ## What has been added
 
+### º2026-09-28
+
+<img src="images/2026-09-28 122920.png">
+
+---
+- Changed ECAL switch handling/state.
+- Removed the strong fixed spur around 168.3 MHz observed at Port 1.
+- Verified with CW tests; normal harmonic content remains unaffected.
+
 ### º2026-09-04
 
 <img src="images/2026-09-04_082138.png">

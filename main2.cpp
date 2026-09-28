@@ -58,6 +58,7 @@
 #include <libopencm3/cm3/scb.h>
 #include <libopencm3/cm3/vector.h>
 
+
 using namespace mculib;
 using namespace std;
 using namespace board;
@@ -128,14 +129,26 @@ static void adc_process();
 static int measurementGetDefaultGain(freqHz_t freqHz);
 void cal_interpolate(void);
 
+//**********************   XJ  *****************************/
 
 int usb_caldata_send(int id);         /*******************  XJ  **************/
-int usb_caldata_receive(uint8_t b);       /*******************  XJ  **************/
+int usb_caldata_receive(uint8_t b);   /*******************  XJ  **************/
+static uint32_t audioCalls = 0;
+static uint32_t audioTotalLen = 0;
+static bool audioOn = false;          /*******************  XJ  **************/
+volatile static freqHz_t audioTune, audioStep;
+void adc_read(volatile uint16_t*& data, int& len, int modulus);
+void usb_transmit_audioSamples();
+bool cmdWriteFIFO(int address, int totalBytes, int nBytes, const uint8_t* data);
+static void adf4350_update(freqHz_t freqHz);
+void audioSetFrecuency();
+static void updateIFrequency(freqHz_t txFreqHz);
+static uint16_t audioQueue[512];
+static int iaudioQueue = 0;
+static bool audioSweep = false;
+/*******************  END XJ  ************/
 
-bool cmdWriteFIFO(int address, 
-                    int totalBytes,
-                    int nBytes,
-                    const uint8_t* data);
+
 
 
 #define myassert(x) if(!(x)) do { errorBlink(3); } while(1)
@@ -271,6 +284,7 @@ static void ui_timer_setup() {
 
 
 static void dsp_timer_setup() {
+	
 	rcc_periph_clock_enable(RCC_TIM1);
 	rcc_periph_reset_pulse(RST_TIM1);
 	// set tim1 to highest priority
@@ -279,11 +293,67 @@ static void dsp_timer_setup() {
 	startTimer(TIM1, tim1Period);
 }
 
-extern "C" void tim1_up_isr() {
-	TIM1_SR = 0;
-	systemTimeCounter += tim1Period;
-	adc_process();
+void audioSetFrecuency() {
+	if (audioTune >= 140000000LL) { 
+		adf4350_update(audioTune);
+		rfsw(RFSW_TXSYNTH, RFSW_TXSYNTH_HF);
+		rfsw(RFSW_RXSYNTH, RFSW_RXSYNTH_HF);
+	}
+	else {
+		//synthesizers::si5351_set((uint32_t) audioTune +lo_freq, (uint32_t)audioTune, 1);
+		synthesizers::si5351_set((uint32_t)audioTune+12000, (uint32_t)audioTune);
+		rfsw(RFSW_TXSYNTH, RFSW_TXSYNTH_LF);
+		rfsw(RFSW_RXSYNTH, RFSW_RXSYNTH_LF);
+	}
 }
+void usb_transmit_audioSamples() { /****************  XJ  ***************/
+	if (!audioOn && !audioSweep)
+		return;
+
+	volatile uint16_t* buf;
+	int len;
+	uint32_t blocksThisCall = 0;
+
+	audioCalls++;
+
+	while(true) {
+
+		for (int i = 0; i < 2; i++) {
+			adc_read(buf, len, 1);
+			for (int j = 0; j < len; j++) {
+				audioTotalLen++;
+				//if ((audioTotalLen & 0x7) == 0) // decimation by 8
+				{
+					int16_t sampleOut = (int16_t)((int32_t)buf[j] - 2048);
+					audioQueue[iaudioQueue++] = (uint16_t)sampleOut;
+					if (iaudioQueue == 512) {
+						// send 512 samples (1024 bytes) through USB:
+						iaudioQueue = 0;
+						serial.print((char*)audioQueue, sizeof(audioQueue));
+						blocksThisCall++;
+						if (audioSweep) 
+							{ audioSweep = false;
+						//serial.print((char*)&len, sizeof(len));
+						return; }
+						if (blocksThisCall >= 64) { 
+							audioOn = false;
+							return; // 64 KiB sent --> return to main() to retrieve PC
+							// response: does the user still want to continue?						}
+						}
+					}
+				}
+			}
+		}
+	}
+//#else
+//	else {
+//		systemTimeCounter += tim1Period;
+//		adc_process();
+//	}
+//#endif
+}
+
+
 extern "C" void tim2_isr() {
 	TIM2_SR = 0;
 	UIHW::checkButtons();
@@ -295,7 +365,8 @@ static int si5351_doUpdate(uint32_t freqHz) {
 //		freqHz = (freqHz/10) * 10;
 //	else
 //		freqHz = (freqHz/100) * 100;
-	return synthesizers::si5351_set(freqHz+lo_freq, freqHz);
+
+	return synthesizers::si5351_set(freqHz + lo_freq,freqHz);
 }
 
 static int si5351_update(uint32_t freqHz) {
@@ -406,13 +477,14 @@ __attribute__((used, noinline)) int calculateSynthWait(bool isSi, int retval) {
 
 // set the measurement frequency including setting the tx and rx synthesizers
 void setFrequency(freqHz_t freqHz) {
+
 	updateIFrequency(freqHz);
 	// On measure, call phase change before update frequency call, so update gain for frequency range here
 	rfsw(RFSW_BBGAIN, RFSW_BBGAIN_GAIN(measurementGetDefaultGain(freqHz)));
 
 	/* Only if frequency changes apply the new frequency.
 	 * This is to support proper CW mode:
-	 * changing to an existing frequency temporarily breaks the signal */
+	 * changing to an existing frequency temporarily breaks the signal7 */
 	if(currFreqHz != freqHz) {
 		currFreqHz = freqHz;
 		// use adf4350 for f >= 140MHz
@@ -455,7 +527,8 @@ static void adc_setup() {
 }
 
 // read and consume data from the adc ring buffer
-void adc_read(volatile uint16_t*& data, int& len, int modulus=1) {
+void adc_read(volatile uint16_t*& data, int& len, int modulus = 1) {
+	
 	static uint32_t lastIndex = 0;
 	uint32_t cIndex = dmaADC.position();
 	uint32_t bufWords = dmaADC.bufferSizeBytes / 2;
@@ -840,11 +913,11 @@ static void setVNASweepToUSB() {
 	vnaMeasurement.sweepDataPointsPerFreq = values;
 	vnaMeasurement.sweepPoints = points;
 	vnaMeasurement.resetSweep();
-	if(outputRawSamples) {
+	if(outputRawSamples) { 
 		setFrequency((freqHz_t)*(uint64_t*)(registers + 0x00));
 	}
 #else
-	setHWSweep(sys_setSweep_args {
+	setHWSweep(sys_setSweep_args {           
 		(freqHz_t)*(uint64_t*)(registers + 0x00),
 		(freqHz_t)*(uint64_t*)(registers + 0x10),
 		points,
@@ -855,6 +928,8 @@ static void setVNASweepToUSB() {
 	}
 #endif
 }
+
+
 static void cmdRegisterWrite(int address) {
 	if(address == 0xee) {
 		usbCaptureMode = true;
@@ -877,7 +952,7 @@ static void cmdRegisterWrite(int address) {
 		usbCaptureMode = false;
 		return;
 	}
-    if(address == 0xe8) {     /*************************   XJ   *******************/
+	if(address == 0xe8) {     /*************************   XJ   *******************/
         int x = registers[0xe8] |
                (registers[0xe9] << 8);
 
@@ -888,11 +963,68 @@ static void cmdRegisterWrite(int address) {
 
         return;
     }
+
 	if (address == 0xde) {     /*************************   XJ   *******************/
 		usb_caldata_send(registers[0xdf]);
 		return;
 	}
+	
+	//if (address == 0xDF) {     /***provisonal en fase de pruebas **   XJ   ************/
+	//	static bool bSynth = false;
+	//	uint8_t value = (uint8_t)registers[0xDF];  
 
+	//	switch (value) {
+	//		case 0: {
+	//			audioOn = false;
+	//			dmaADC.stop();
+	//			audioOn = true;
+
+	//			break;
+	//		}
+	//		case 1: {
+	//			// audio OFF: restore initial 300 ksps
+	//			audioOn = false;
+	//			bSynth = false;
+	//			audioSweep = false;
+	//			// Restore normal process
+	//			boardInit();
+
+	//			adc_setup();      // inicializa y pide dmaADC.start()
+
+	//			break;
+	//		}
+	//		case 2: {
+	//			audioOn = true; // start/continue sending samples
+	//			break;
+	//		}
+	//		case 3: { // Tune (& sweep)
+	//			audioOn = false;
+	//			audioTune = (freqHz_t) * (uint64_t*)(registers + 0x00);
+	//			uint16_t step = (uint16_t) * (registers + 0x10);
+	//			for(int i=0x10;i<0x18;i++) 
+	//				registers[i] = 0;
+	//			int points = (uint16_t) * (registers + 0x20);
+
+	//			volatile uint16_t* buf;
+	//			int len;
+	//			// descartar datos que ya estaban en el DMA
+	//			adc_read(buf, len, 1);
+
+	//			iaudioQueue = 0;
+
+	//			//for (int iPoint = 0; iPoint < points; iPoint++) 
+	//			{
+	//				audioSweep = true;
+	//				usb_transmit_audioSamples();
+	//				audioTune += step;
+	//				audioSetFrecuency();
+	//			}
+
+	//			break;
+	//		}
+	//	}
+	//	return;
+	//}
 	if (address == 0x40) {UIActions::set_averaging(registers[0x40]); return;}
 	if (address == 0x42) {UIActions::set_adf4350_txPower(registers[0x42]); return;}
 
@@ -920,9 +1052,6 @@ static void cmdRegisterWrite(int address) {
 		usbTxQueueRPos = usbTxQueueWPos;
 	}
 }
-
-int currValidByte = 0;
-uint8_t validChars[] = { 0xDE, 0x1};
 static void cmdInit() {
 	cmdParser.handleReadFIFO = [](int address, int nValues) {
 		return cmdReadFIFO(address, nValues);
@@ -935,7 +1064,7 @@ static void cmdInit() {
 				usb_caldata_receive(data[i]);
              }
 		 }
-		return false;
+		 return false;
     };
 	cmdParser.handleWrite = [](int address) {
 		return cmdRegisterWrite(address);
@@ -1248,37 +1377,40 @@ static void measurement_setup() {
 }
 
 void adc_process() {
-	if(!outputRawSamples) {
-		volatile uint16_t* buf;
-		int len;
-		for(int i=0; i<2; i++) {
-			adc_read(buf, len);
-			vnaMeasurement.processSamples((uint16_t*)buf, len);
-		}
+	volatile uint16_t* buf;
+	int len;
+
+	if (outputRawSamples)
+		return;
+
+	for (int i = 0; i < 2; i++) {
+		adc_read(buf, len, 1);
+		vnaMeasurement.processSamples((uint16_t*)buf, len);
 	}
 }
-void insertSamples(int32_t valRe, int32_t valIm, bool c) {
-	vnaMeasurement.sampleProcessor_emitValue(valRe, valIm, c);
-}
+	
+		void insertSamples(int32_t valRe, int32_t valIm, bool c) {
+		vnaMeasurement.sampleProcessor_emitValue(valRe, valIm, c);
+	}
 
 static int cnt = 0;
 static void usb_transmit_rawSamples() {
 	volatile uint16_t* buf;
 	int len;
-	adc_read(buf, len);
-	int8_t tmpBuf[adcBufSize];
-	for(int i=0; i<len; i++)
-		tmpBuf[i] = int8_t(buf[i] >> 4) - 128;
-	serial.print((char*)tmpBuf, len);
+	adc_read(buf, len, 1);
+		int8_t tmpBuf[adcBufSize];
+		for (int i = 0; i < len; i++)
+			tmpBuf[i] = int8_t(buf[i] >> 4) - 128;
+		serial.print((char*)tmpBuf, len);
 
-	cnt += len;
+		cnt += len;
 
-	rfsw(RFSW_ECAL, RFSW_ECAL_NORMAL);
-	//rfsw(RFSW_RECV, ((cnt / 500) % 2) ? RFSW_RECV_REFL : RFSW_RECV_PORT2);
-	//rfsw(RFSW_REFL, ((cnt / 500) % 2) ? RFSW_REFL_ON : RFSW_REFL_OFF);
-	rfsw(RFSW_RECV, RFSW_RECV_PORT2);
-	rfsw(RFSW_REFL, RFSW_REFL_OFF);
-	rfsw(RFSW_BBGAIN, RFSW_BBGAIN_GAIN(0));
+		rfsw(RFSW_ECAL, RFSW_ECAL_NORMAL);
+		//rfsw(RFSW_RECV, ((cnt / 500) % 2) ? RFSW_RECV_REFL : RFSW_RECV_PORT2);
+		//rfsw(RFSW_REFL, ((cnt / 500) % 2) ? RFSW_REFL_ON : RFSW_REFL_OFF);
+		rfsw(RFSW_RECV, RFSW_RECV_PORT2);
+		rfsw(RFSW_REFL, RFSW_REFL_OFF);
+		rfsw(RFSW_BBGAIN, RFSW_BBGAIN_GAIN(0));
 }
 int usb_caldata_send(int id)  /*********************  XJ ************/
 {
@@ -1378,9 +1510,11 @@ static float bessel0(float x) {
 }
 
 static float kaiser_window(float k, float n, float beta) {
-	if (beta == 0.0) return 1.0;
-	float r = (2 * k) / (n - 1) - 1;
-	return bessel0(beta * sqrt(1 - r * r)) / bessel0(beta);
+	if (beta == 0.0f) return 1.0f;
+
+	float r = (2.0f * k) / (n - 1.0f) - 1.0f;
+
+	return bessel0(beta * sqrtf(1.0f - r * r)) / bessel0(beta);
 }
 
 static void transform_domain() {
@@ -1457,14 +1591,63 @@ static void transform_domain() {
 	}
 }
 
-static void apply_edelay(int i, complexf& refl, complexf& thru) {
-	if (electrical_delay == 0.0) return;
-	float w = 2 * M_PI * electrical_delay * UIActions::frequencyAt(i) * 1E-12;
-	complexf s = polar(1.f, w);
-	refl *= s;
-	thru *= s;
-}
+//static void apply_edelay(int i, complexf& refl, complexf& thru) {  /************* XJ *********/
+//	if (electrical_delay == 0.0) return;
+//	float w = 2 * M_PI * electrical_delay * UIActions::frequencyAt(i) * 1E-12;
+//	complexf s = polar(1.f, w);
+//	refl *= s;
+//	thru *= s;
+//}
+static void apply_edelay(int i, complexf& refl, complexf& thru) { /************* XJ *********/
+	if (electrical_delay == 0.0f)
+		return;
 
+	constexpr float TWO_PI = 6.28318530718f;
+	constexpr float SCALE = 200.0f / TWO_PI;
+	constexpr float INV32767 = 1.0f / 32767.0f;
+
+	float w = TWO_PI *
+		(float)electrical_delay *
+		(float)UIActions::frequencyAt(i) *
+		1.0e-12f;
+
+	float pos = w * SCALE;
+
+	// Reduce to 0..199
+	int base = (int)floorf(pos);
+	float frac = pos - (float)base;
+
+	base %= 200;
+	if (base < 0) {
+		base += 200;
+		frac = 1.0f - frac;
+	}
+
+	int next = base + 1;
+	if (next == 200)
+		next = 0;
+
+	float c0 = sinROM200x1[base * 2];
+	float s0 = -sinROM200x1[base * 2 + 1];
+
+	float c1 = sinROM200x1[next * 2];
+	float s1 = -sinROM200x1[next * 2 + 1];
+
+	float c = (c0 + (c1 - c0) * frac) * INV32767;
+	float s = (s0 + (s1 - s0) * frac) * INV32767;
+
+	float re = refl.real();
+	float im = refl.imag();
+
+	refl = complexf(re * c - im * s,
+		re * s + im * c);
+
+	re = thru.real();
+	im = thru.imag();
+
+	thru = complexf(re * c - im * s,
+		re * s + im * c);
+}
 void
 cal_interpolate(void)
 {
@@ -1702,7 +1885,8 @@ int main(void) {
 
 	pinMode(led, OUTPUT);
 	pinMode(led2, OUTPUT);
-	pinMode(RFSW_ECAL, OUTPUT);
+	// Before it was pinMode(RFSW_ECAL, OUTPUT);
+	pinMode(RFSW_ECAL[0], HIGH); /****  XJ ****/
 	pinMode(RFSW_BBGAIN, OUTPUT);
 	pinMode(RFSW_TXSYNTH, OUTPUT);
 	pinMode(RFSW_RXSYNTH, OUTPUT);
@@ -1818,27 +2002,30 @@ int main(void) {
 
 	redraw_frame();
 
-	bool testSG = false;
+	//bool testSG = false;
 
-	if(testSG) {
-		while(1) {
-			uint16_t tmp = 1;
-			vnaMeasurement.processSamples(&tmp, 1);
-		}
-		return 0;
-	}
+	//if(testSG) {
+	//	while(1) {
+	//		uint16_t tmp = 1;
+	//		vnaMeasurement.processSamples(&tmp, 1);
+	//	}
+	//	return 0;
+	//}
 
 
 	bool lastUSBDataMode = false;
 	while(true) {
 		// process any outstanding commands from usb
 		cmdInputFIFO.drain();
+		if (audioOn) {
+			usb_transmit_audioSamples();
+			continue;
+		}
 		if (usbCaptureMode) {
 			continue;
 		}
-
-		if(usbDataMode) {
-			if(outputRawSamples)
+		if (usbDataMode) {
+			if (outputRawSamples)
 				usb_transmit_rawSamples();
 
 			// display "usb mode" screen
@@ -2260,10 +2447,11 @@ namespace UIActions {
 #else
 		sys_syscall(4, gainTable);
 #endif
-
+		/*
 		for(int i=0; i<=RFSW_BBGAIN_MAX; i++) {
 			printk("BBGAIN %d: %.2f dB\n", i, log10f(gainTable[i])*20.f);
 		}
+		*/
 	}
 
 	int caldata_recall(int id) {
@@ -2329,5 +2517,8 @@ namespace UIActions {
 	}
 	void enqueueEvent(const small_function<void()>& cb) {
 		eventQueue.enqueue(cb);
-	}
+	}	
+
+	
+
 }

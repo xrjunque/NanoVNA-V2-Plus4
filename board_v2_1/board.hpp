@@ -175,6 +175,7 @@ namespace board {
 	// call this function at the beginning of main()
 	void boardInit();
 
+
 	// returns an estimate of the HSE frequency in Hz.
 	// called by boardInit() to set hseEstimateHz.
 	uint32_t detectHSEFreq();

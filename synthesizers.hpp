@@ -5,8 +5,7 @@
 namespace synthesizers {
 
 	// initialize and configure si5351
-	bool si5351_setup();
-
+	bool si5351_setup(); 
 	// set si5351 frequency for tx and rx port.
 	// returns 0 if one output divider changed;
 	// returns 1 if two output dividers changed;
@@ -70,5 +69,6 @@ namespace synthesizers {
 		adf4350.sendConfig();
 		adf4350.sendN();
 	}
+
 }
  
