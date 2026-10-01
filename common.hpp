@@ -4,8 +4,11 @@
 #include <array>
 
 using namespace std;
+void si5351_powerdown(); /*******************  XJ  ***********/
+void si5351_powerup(); /*******************  XJ  ***********/
 
-
+static void adf4350_powerup(); /*******************  XJ  ***********/
+static void adf4350_powerdown(); /*******************  XJ  ***********/
 // common data structures, constants, and convenience functions.
 // DO NOT ADD NON-CONSTANT VARIABLES OR STATEFUL FUNCTIONS HERE.
 
@@ -262,9 +265,34 @@ struct uistat_t {
 #define CONFIG_MAGIC 0x8008123c
 
 
-static inline bool is_freq_for_adf4350(freqHz_t freq)
-{
-	return freq > FREQUENCY_CHANGE_OVER;
+static inline bool is_freq_for_adf4350(freqHz_t freq) /*********  XJ  ***********/
+{    
+    static bool lastWasAdf = false;
+    bool useAdf = (freq > FREQUENCY_CHANGE_OVER);
+
+    if (useAdf != lastWasAdf) {
+
+        if (useAdf) {
+            // Entramos en zona ADF4350
+            adf4350_powerup(); 
+
+            // Si5351 ya no necesario
+            si5351_powerdown();
+        }
+        else {
+            // Entramos en zona Si5351
+            si5351_powerup();
+
+            // ADF4350 ya no necesario
+            adf4350_powerdown();
+        }
+
+        lastWasAdf = useAdf;
+    }
+
+    return useAdf;
+
+	//return freq > FREQUENCY_CHANGE_OVER;
 }
 
 // convert vbat [mV] to battery indicator

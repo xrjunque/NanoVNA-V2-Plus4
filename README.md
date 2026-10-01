@@ -6,6 +6,12 @@
 - 2026-09-04: Save and restore calibration data to and from the PC.
 
 ## What has been added
+### º2026-10-01
+- Eliminated mixing between the two synthesizers signals.
+<img src="images/2026-10-01 173128.png">
+- Before: <img src="images/Before 2026-09-30 191141.png"> 
+- After: <img src="images/After 2026-10-01 161812.png">
+
 ### º2026-09-28 (B)
 <img src="images/2026-09-28 223234.png">
 

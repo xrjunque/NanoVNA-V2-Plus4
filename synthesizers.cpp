@@ -48,7 +48,7 @@ namespace synthesizers {
 
 		si5351.CLK[rPort].CLK_R_Div = CLK_R_Div1; // divide by 1; 100MHz
 		si5351.CLK[rPort].CLK_Enable = ON;	//turn on the output
-		si5351.CLK[rPort].CLK_I_Drv = CLK_I_Drv_8mA;
+		si5351.CLK[rPort].CLK_I_Drv = CLK_I_Drv_8mA; 
 
 		if (pPort >= 0) {
 			si5351.CLK[pPort].CLK_Clock_Source = CLK_Clock_Source_XTAL;
@@ -83,7 +83,7 @@ namespace synthesizers {
 		if(rxFreqHz < 500000) { /* Below 500Khz */
 			rDiv = CLK_R_Div128;
 			divInputFreqHz /= 128;
-		} else if(rxFreqHz < 1000000) { /* Between 500hz and 1 Mhz */
+		} else if(rxFreqHz < 1000000) { /* Between 500kHz and 1 Mhz */
 			rDiv = CLK_R_Div4;
 			divInputFreqHz /= 4;
 		} else if(rxFreqHz >= 100000000) { /* Above 100Mhz */

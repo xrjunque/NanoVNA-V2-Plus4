@@ -146,7 +146,6 @@ static void updateIFrequency(freqHz_t txFreqHz);
 static uint16_t audioQueue[512];
 static int iaudioQueue = 0;
 static bool audioSweep = false;
-
 /*******************  END XJ  ************/
 
 
@@ -401,16 +400,6 @@ static void adf4350_update(freqHz_t freqHz) {
 	synthesizers::adf4350_set(adf4350_rx, freqHz + lo_freq, adf4350_freqStep);
 }
 
-/* Powerdown both devices */
-static void adf4350_powerdown(void) {
-	adf4350_tx.sendPowerDown();
-	adf4350_rx.sendPowerDown();
-}
-
-static void adf4350_powerup(void) {
-	adf4350_tx.sendPowerUp();
-	adf4350_rx.sendPowerUp();
-}
 
 // automatically set IF frequency depending on rf frequency and board parameters
 static void updateIFrequency(freqHz_t txFreqHz) {
@@ -970,62 +959,69 @@ static void cmdRegisterWrite(int address) {
 		return;
 	}
 	
-	//if (address == 0xDF) {     /***provisonal en fase de pruebas **   XJ   ************/
-	//	static bool bSynth = false;
-	//	uint8_t value = (uint8_t)registers[0xDF];  
+	if (address == 0xDF) {     /***provisonal en fase de pruebas **   XJ   ************/
+		static bool bSynth = false;
+		uint8_t value = (uint8_t)registers[0xDF];  
 
-	//	switch (value) {
-	//		case 0: {
-	//			audioOn = false;
-	//			dmaADC.stop();
-	//			audioOn = true;
+		switch (value) {
+			case 0: {
+				audioOn = false;
+				dmaADC.stop();
+				audioOn = true;
 
-	//			break;
-	//		}
-	//		case 1: {
-	//			// audio OFF: restore initial 300 ksps
-	//			audioOn = false;
-	//			bSynth = false;
-	//			audioSweep = false;
-	//			// Restore normal process
-	//			boardInit();
+				break;
+			}
+			case 1: {
+				// audio OFF: restore initial 300 ksps
+				audioOn = false;
+				bSynth = false;
+				audioSweep = false;
+				// Restore normal process
+				boardInit();
 
-	//			adc_setup();      // inicializa y pide dmaADC.start()
+				adc_setup();      // inicializa y pide dmaADC.start()
 
-	//			break;
-	//		}
-	//		case 2: {
-	//			audioOn = true; // start/continue sending samples
-	//			break;
-	//		}
-	//		case 3: { // Tune (& sweep)
-	//			audioOn = false;
-	//			audioTune = (freqHz_t) * (uint64_t*)(registers + 0x00);
-	//			uint16_t step = (uint16_t) * (registers + 0x10);
-	//			for(int i=0x10;i<0x18;i++) 
-	//				registers[i] = 0;
-	//			int points = (uint16_t) * (registers + 0x20);
+				break;
+			}
+			case 2: {
+				audioOn = true; // start/continue sending samples
+				break;
+			}
+			case 3: { // Tune (& sweep)
+				audioOn = false;
+				audioTune = (freqHz_t) * (uint64_t*)(registers + 0x00);
+				uint16_t step = (uint16_t) * (registers + 0x10);
+				int points = (uint16_t) * (registers + 0x20);
 
-	//			volatile uint16_t* buf;
-	//			int len;
-	//			// descartar datos que ya estaban en el DMA
-	//			adc_read(buf, len, 1);
+				//for(int i=0x10;i<0x18;i++) // step = 0
+				//	registers[i] = 0;
+				//registers[0x20] = 1; // points = 1
+				//for (int i = 0x21;i < 0x28;i++)
+				//	registers[i] = 0;
 
-	//			iaudioQueue = 0;
+				volatile uint16_t* buf;
+				int len;
+				// descartar datos que ya estaban en el DMA
+				adc_read(buf, len, 1);
 
-	//			//for (int iPoint = 0; iPoint < points; iPoint++) 
-	//			{
-	//				audioSweep = true;
-	//				usb_transmit_audioSamples();
-	//				audioTune += step;
-	//				audioSetFrecuency();
-	//			}
+				iaudioQueue = 0;
 
-	//			break;
-	//		}
-	//	}
-	//	return;
-	//}
+				{
+					audioOn = false;
+					audioSweep = true;
+					usb_transmit_audioSamples();
+					//audioTune += step;
+					//for(int i=0; i<8; i++)
+					//	registers[i] = (uint8_t)((audioTune >>(i*8)) & 0xFF);
+					//ecalState = ECAL_STATE_MEASURING;
+					//vnaMeasurement.ecalIntervalPoints = 1;
+				}
+
+				break;
+			}
+		}
+		return;
+	}
 	if (address == 0x40) {UIActions::set_averaging(registers[0x40]); return;}
 	if (address == 0x42) {UIActions::set_adf4350_txPower(registers[0x42]); return;}
 
@@ -1360,15 +1356,15 @@ static void measurement_setup() {
 	};
 	vnaMeasurement.sweepSetupChanged = [](freqHz_t start, freqHz_t stop) {
 		if(!is_freq_for_adf4350(stop)) {
-			/* ADF4350 can be powered down */
-			adf4350_powerdown();
+			/* ADF4350 can be powered down */ 
+		//	adf4350_powerdown();  /*********** commented  XJ  **************/
+		//}
+		//else {
+			//adf4350_powerup();
 		}
-		else {
-			adf4350_powerup();
-		}
-		if(is_freq_for_adf4350(start)) {
-			/* Si5351 not needed, power it down? */
-		}
+		//if(is_freq_for_adf4350(start)) {
+		//	/* Si5351 not needed, power it down? */
+		//}  /************* end commented XJ  **************/
 	};
 	vnaMeasurement.nPeriods = MEASUREMENT_NPERIODS_NORMAL;
 	vnaMeasurement.nPeriodsCalibrating = MEASUREMENT_NPERIODS_CALIBRATING;
