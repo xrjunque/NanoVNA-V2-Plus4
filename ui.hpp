@@ -2,6 +2,7 @@
 
 #include <stdint.h>
 #include "uihw.hpp"
+#include "commonXJ.hpp"
 
 #ifndef DISPLAY_ST7796
 // Maximum menu buttons count

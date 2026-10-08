@@ -6,6 +6,12 @@
 - 2026-09-04: Save and restore calibration data to and from the PC.
 
 ## What has been added
+### º2026-10-08
+<img src="images/CW_10MHz.png">
+<img src="images/Green traces now.png">
+
+- Hardware sweep hold control. Required to keep the RF output continuous in CW mode.
+
 ### º2026-10-01
 - Eliminated mixing between the two synthesizers' signals.
 <img src="images/2026-10-01 173128.png">

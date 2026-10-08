@@ -146,6 +146,7 @@ static void updateIFrequency(freqHz_t txFreqHz);
 static uint16_t audioQueue[512];
 static int iaudioQueue = 0;
 static bool audioSweep = false;
+void setHWSweepHold(bool hold); /************** XJ **************/
 /*******************  END XJ  ************/
 
 
@@ -1151,6 +1152,15 @@ static void measurementDataSmooth(complexf *data, int points, int count){
 		data[j] = (data[j] + data[j] + prev)/3.0f;
 	}
 }
+
+void setHWSweepHold(bool hold)  /************** XJ XJ ****************/
+{
+	// Hardware sweep hold control.
+	// Required to keep the RF output continuous in CW mode.
+	uint32_t value = hold ? 1 : 0;
+	sys_syscall(6, &value);
+}
+
 
 #define USE_FIXED_CORRECTION
 // callback called by VNAMeasurement when an observation is available.

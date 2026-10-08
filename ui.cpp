@@ -43,7 +43,7 @@ using namespace UIActions;
 #define TRUE true
 #define FALSE false
 
-
+extern void setHWSweepHold(bool hold); /************** XJ **************/
 int8_t previous_marker = MARKER_INVALID;
 
 enum {
@@ -1746,7 +1746,8 @@ leave_ui_mode()
 
 void set_numeric_value(void)
 {
-  switch (keypad_mode) {
+    setHWSweepHold(false); /************** XJ **************/
+    switch (keypad_mode) {
   case KM_START:
     set_sweep_frequency(ST_START, uistat.value);
     break;
@@ -1763,6 +1764,7 @@ void set_numeric_value(void)
     set_sweep_points(uistat.value);
     break;
   case KM_CW:
+    setHWSweepHold(true); /************** XJ **************/
     set_sweep_frequency(ST_CW, uistat.value);
     break;
   case KM_SCALE:
@@ -2007,6 +2009,7 @@ keypad_click(int key)
     } else if (c == KP_N) {
       scale *= 1000;
     }
+    setHWSweepHold(false); /************** XJ **************/
     /* numeric input done */
     float value = my_atof(kp_buf) * scale;
     switch (keypad_mode) {
@@ -2026,6 +2029,7 @@ keypad_click(int key)
       set_sweep_points(value);
       break;
     case KM_CW:
+      setHWSweepHold(true); /************** XJ **************/
       set_sweep_frequency(ST_CW, value);
       break;
     case KM_SCALE:
